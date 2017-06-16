@@ -1,5 +1,5 @@
 import {withState, withProps} from 'recompose'
-import {fromPairs, zipWith, map, max, min, get, compose, keyBy, sortedIndex, zip} from 'lodash/fp'
+import {fromPairs, zipWith, map, max, min, get, compose, sortedIndex, toPairs} from 'lodash/fp'
 import {Component} from 'react'
 import cx from 'classnames'
 import {timeParse, timeFormat} from 'd3-time-format'
@@ -61,8 +61,6 @@ class Lines extends Component {
       }
 
       const colors = ['blue', 'red']
-      const lines = table.columns.slice(1).map(({key}) => {
-      })
       table.columns.slice(1).forEach(({key}, i) => {
         const yScale = this.makeScale(key)
         const points = rows.map(row => [
@@ -88,16 +86,13 @@ class Lines extends Component {
 
   getContext = cvs => {
     this._cvs = cvs
-    this._ctx = cvs.getContext('2d');
-    cvs.addEventListener('mouseover', ({pageX: x, pageY: y}) => {
-      this.props.setCursor({x, y})
-    }, false)
-    cvs.addEventListener('mousemove', ({pageX: x, pageY: y}) => {
-      this.props.setCursor({x, y})
-    }, false)
-    cvs.addEventListener('mouseout', () => {
-      this.props.setCursor(null)
-    }, false)
+    this._ctx = cvs.getContext('2d')
+    const updateCursor = ({pageX: x, pageY: y}) => this.props.setCursor({x, y})
+    toPairs({
+      'mouseover': updateCursor,
+      'mousemove': updateCursor,
+      'mouseout': setCursor(null),
+    }).forEach(([evt, cb]) => cvs.addEventListener(evt, cb, false))
   }
 
   render() {
