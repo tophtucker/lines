@@ -13,6 +13,8 @@ const parse = (unit, value) => {
   if (unit === 'date') return fromYmd(value)
   return parseFloat(value)
 }
+
+const PADDING = 40
 const COLORS = ['blue', 'red']
 
 class Lines extends Component {
@@ -41,6 +43,17 @@ class Lines extends Component {
     max(this.props.rows.map(get(key))),
   ]).range([this.props.height, 0])
 
+  zoomContext = cb => {
+    this._ctx.save()
+    this._ctx.translate(PADDING, PADDING)
+    this._ctx.scale(
+      (this.props.width - PADDING * 2) / this.props.width,
+      (this.props.height - PADDING * 2) / this.props.height,
+    )
+    cb()
+    this._ctx.restore()
+  }
+
   draw = () => {
     requestAnimationFrame(this.draw)
     if (!this._ctx) return
@@ -55,35 +68,38 @@ class Lines extends Component {
     }
     ctx.clearRect(0, 0, width, height)
 
-    if (row) {
-      // Draw cursor
-      this.path('white', c => {
-        c.moveTo(xScale(row.ix), 0)
-        c.lineTo(xScale(row.ix), height)
-      })
-    }
-
-    table.columns.slice(1).forEach(({key}, i) => {
-      // Draw line
-      const yScale = this.makeScale(key)
-      const values = rows.map(get(key))
-      const points = zip(indexes.map(xScale), values.map(yScale))
-      this.path(COLORS[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
-
+    this.zoomContext(() => {
       if (row) {
-        // Draw horizontal line orthogonal to cursor
-        const y = yScale(get(key, row))
-        this.path(COLORS[i], c => {
-          c.moveTo(0, y)
-          c.lineTo(width, y)
+        // Draw cursor
+        this.path('white', c => {
+          c.moveTo(xScale(row.ix), 0)
+          c.lineTo(xScale(row.ix), height)
         })
       }
+
+      table.columns.slice(1).forEach(({key}, i) => {
+        // Draw line
+        const yScale = this.makeScale(key)
+        const values = rows.map(get(key))
+        const points = zip(indexes.map(xScale), values.map(yScale))
+        this.path(COLORS[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
+
+        if (row) {
+          // Draw horizontal line orthogonal to cursor
+          const y = yScale(get(key, row))
+          this.path(COLORS[i], c => {
+            c.moveTo(0, y)
+            c.lineTo(width, y)
+          })
+        }
+      })
     })
   }
 
   getContext = cvs => {
     this._cvs = cvs
     this._ctx = cvs.getContext('2d')
+
     const updateCursor = ({pageX: x, pageY: y}) => this.props.setCursor({x, y})
     toPairs({
       'mouseover': updateCursor,
@@ -101,9 +117,9 @@ export default compose(
   withState('rows', 'setRows', []),
   withState('cursor', 'setCursor', null),
   withProps(props => {
-    const [width, height] = [innerWidth, innerHeight]
     const indexes = map('ix', props.rows)
     const indexRange = [min(indexes), max(indexes)]
+    const [width, height] = [innerWidth, innerHeight]
     const xScale = scaleLinear().domain(indexRange).range([0, width])
     return {width, height, xScale, indexes}
   }),
