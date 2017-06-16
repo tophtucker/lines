@@ -1,5 +1,5 @@
 import {withState, withProps} from 'recompose'
-import {fromPairs, zipWith, map, max, min, get, compose, sortedIndex, toPairs} from 'lodash/fp'
+import {fromPairs, zip, zipWith, map, max, min, get, compose, sortedIndex, toPairs} from 'lodash/fp'
 import {Component} from 'react'
 import cx from 'classnames'
 import {timeParse, timeFormat} from 'd3-time-format'
@@ -27,19 +27,17 @@ class Lines extends Component {
     this.draw()
   }
 
-  path = (opts, cb) => {
-    Object.assign(this._ctx, opts)
+  path = (strokeStyle, cb) => {
+    Object.assign(this._ctx, {strokeStyle})
     this._ctx.beginPath()
     cb(this._ctx)
-    if (opts.strokeStyle) {
-      this._ctx.stroke()
-    }
+    this._ctx.stroke()
     this._ctx.closePath()
   }
 
   makeScale = key => scaleLinear().domain([
-    min(map(get([key, 'parsed']), this.props.rows)),
-    max(map(get([key, 'parsed']), this.props.rows)),
+    min(this.props.rows.map(get([key, 'parsed']))),
+    max(this.props.rows.map(get([key, 'parsed']))),
   ]).range([this.props.height, 0])
 
   draw = () => {
@@ -54,27 +52,24 @@ class Lines extends Component {
 
       if (row) {
         const date = row.ix.parsed
-        this.path({strokeStyle: 'white'}, c => {
+        this.path('white', c => {
           c.moveTo(xScale(date), 0)
           c.lineTo(xScale(date), height)
         })
       }
 
+      const indexes = rows.map(get('ix.parsed'))
       const colors = ['blue', 'red']
       table.columns.slice(1).forEach(({key}, i) => {
         const yScale = this.makeScale(key)
-        const points = rows.map(row => [
-          xScale(row.ix.parsed),
-          yScale(get([key, 'parsed'], row)),
-        ])
-        this.path({strokeStyle: colors[i]}, c => {
-          points.forEach(([x, y]) => c.lineTo(x, y))
-        })
+        const values = rows.map(get([key, 'parsed']))
+        const points = zip(indexes.map(xScale), values.map(yScale))
+        this.path(colors[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
 
         if (row) {
           const yScale = this.makeScale(key)
           const y = yScale(get([key, 'parsed'], row))
-          this.path({strokeStyle: colors[i]}, c => {
+          this.path(colors[i], c => {
             c.moveTo(0, y)
             c.lineTo(width, y)
           })
@@ -91,7 +86,7 @@ class Lines extends Component {
     toPairs({
       'mouseover': updateCursor,
       'mousemove': updateCursor,
-      'mouseout': setCursor(null),
+      'mouseout': this.props.setCursor(null),
     }).forEach(([evt, cb]) => cvs.addEventListener(evt, cb, false))
   }
 
