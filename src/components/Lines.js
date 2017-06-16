@@ -32,6 +32,7 @@ class Lines extends Component {
 
   path = (strokeStyle, cb) => {
     Object.assign(this._ctx, {strokeStyle})
+    this._ctx.lineWidth = 1 / this.props.width
     this._ctx.beginPath()
     cb(this._ctx)
     this._ctx.stroke()
@@ -41,15 +42,13 @@ class Lines extends Component {
   makeScale = key => scaleLinear().domain([
     min(this.props.rows.map(get(key))),
     max(this.props.rows.map(get(key))),
-  ]).range([this.props.height, 0])
+  ]).range([1, 0])
 
   zoomContext = cb => {
     this._ctx.save()
     this._ctx.translate(PADDING, PADDING)
-    this._ctx.scale(
-      (this.props.width - PADDING * 2) / this.props.width,
-      (this.props.height - PADDING * 2) / this.props.height,
-    )
+    const {width, height} = this.props
+    this._ctx.scale(width - PADDING * 2, height - PADDING * 2)
     cb()
     this._ctx.restore()
   }
@@ -73,7 +72,7 @@ class Lines extends Component {
         // Draw cursor
         this.path('white', c => {
           c.moveTo(xScale(row.ix), 0)
-          c.lineTo(xScale(row.ix), height)
+          c.lineTo(xScale(row.ix), 1)
         })
       }
 
@@ -82,14 +81,16 @@ class Lines extends Component {
         const yScale = this.makeScale(key)
         const values = rows.map(get(key))
         const points = zip(indexes.map(xScale), values.map(yScale))
-        this.path(COLORS[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
+        this.path(
+          COLORS[i],
+          c => points.forEach(([x, y]) => c.lineTo(x, y)),
+        )
 
         if (row) {
           // Draw horizontal line orthogonal to cursor
-          const y = yScale(get(key, row))
           this.path(COLORS[i], c => {
-            c.moveTo(0, y)
-            c.lineTo(width, y)
+            c.moveTo(0, yScale(get(key, row))),
+            c.lineTo(1, yScale(get(key, row)))
           })
         }
       })
@@ -99,8 +100,20 @@ class Lines extends Component {
   getContext = cvs => {
     this._cvs = cvs
     this._ctx = cvs.getContext('2d')
+    const {width, height} = this.props
 
-    const updateCursor = ({pageX: x, pageY: y}) => this.props.setCursor({x, y})
+    const updateCursor = ({pageX, pageY}) => {
+      const inX = pageX >= PADDING && pageX <= width - PADDING
+      const inY = pageY >= PADDING && pageY <= height - PADDING
+      if (inX && inY) {
+        this.props.setCursor({
+          x: (pageX - PADDING) / (width - PADDING * 2),
+          y: (pageY - PADDING) / (height - PADDING * 2),
+        })
+      } else {
+        this.props.setCursor(null)
+      }
+    }
     toPairs({
       'mouseover': updateCursor,
       'mousemove': updateCursor,
@@ -120,7 +133,7 @@ export default compose(
     const indexes = map('ix', props.rows)
     const indexRange = [min(indexes), max(indexes)]
     const [width, height] = [innerWidth, innerHeight]
-    const xScale = scaleLinear().domain(indexRange).range([0, width])
+    const xScale = scaleLinear().domain(indexRange).range([0, 1])
     return {width, height, xScale, indexes}
   }),
   withProps(props => {
