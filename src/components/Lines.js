@@ -1,5 +1,5 @@
-import {withState} from 'recompose'
-import {fromPairs, zipWith, map, max, min, get, compose, keyBy, sortedIndex} from 'lodash/fp'
+import {withState, withProps} from 'recompose'
+import {fromPairs, zipWith, map, max, min, get, compose, keyBy, sortedIndex, zip} from 'lodash/fp'
 import {Component} from 'react'
 import cx from 'classnames'
 import {timeParse, timeFormat} from 'd3-time-format'
@@ -27,64 +27,61 @@ class Lines extends Component {
     this.draw()
   }
 
+  path = (opts, cb) => {
+    Object.assign(this._ctx, opts)
+    this._ctx.beginPath()
+    cb(this._ctx)
+    if (opts.strokeStyle) {
+      this._ctx.stroke()
+    }
+    this._ctx.closePath()
+  }
+
   draw = () => {
     if (this._ctx) {
       const ctx = this._ctx
-      const [width, height] = [innerWidth, innerHeight]
+      const {width, height, rows, row} = this.props
       if (this._cvs.width !== width || this._cvs.height !== height) {
         this._cvs.width = width
         this._cvs.height = height
       }
       ctx.clearRect(0, 0, width, height)
 
-      const rows = this.props.rows
       const xScale = scaleLinear().domain([
         min(map('ix.parsed', rows)), max(map('ix.parsed', rows)),
       ]).range([0, width])
       const makeScale = key => scaleLinear().domain([
         min(map(get([key, 'parsed']), rows)), max(map(get([key, 'parsed']), rows)),
       ]).range([height, 0])
+
       const rowLookup = keyBy('ix.raw', rows)
       const lines = table.columns.slice(1).map(({key}) => {
         const yScale = makeScale(key)
         return rows.map(row => [xScale(row.ix.parsed), yScale(get([key, 'parsed'], row))])
       })
 
-      let date = null
-      let row = null
-      if (this.props.cursor) {
-        const {x, y} = this.props.cursor
-        const index = sortedIndex(toYmd(new Date(xScale.invert(x))), map('ix.raw', rows))
-        row = rows[index]
-        date = rows[index].ix.parsed
-
-        ctx.beginPath()
-        ctx.moveTo(xScale(date), 0)
-        ctx.lineTo(xScale(date), height)
-        ctx.strokeStyle = 'white'
-        ctx.stroke()
-        ctx.closePath()
-      }
-      const colors = ['blue', 'red']
-      lines.forEach((points, i) => {
-        ctx.beginPath()
-        points.map(([x, y]) => ctx.lineTo(x, y))
-        ctx.strokeStyle = colors[i]
-        ctx.stroke()
-        ctx.closePath()
-      })
       if (row) {
-        table.columns.slice(1).map(({key}, i) => {
-          const yScale = makeScale(key)
-          const y = yScale(get([key, 'parsed'], row))
-          ctx.beginPath()
-          ctx.moveTo(0, y)
-          ctx.lineTo(width, y)
-          ctx.strokeStyle = colors[i]
-          ctx.stroke()
-          ctx.closePath()
+        const date = row.ix.parsed
+        this.path({strokeStyle: 'white'}, c => {
+          c.moveTo(xScale(date), 0)
+          c.lineTo(xScale(date), height)
         })
       }
+
+      const colors = ['blue', 'red']
+      zip(lines, table.columns.slice(1)).forEach(([points, {key}], i) => {
+        this.path({strokeStyle: colors[i]}, c => {
+          points.forEach(([x, y]) => c.lineTo(x, y))
+        })
+        if (row) {
+          const yScale = makeScale(key)
+          const y = yScale(get([key, 'parsed'], row))
+          this.path({strokeStyle: colors[i]}, c => {
+            c.moveTo(0, y)
+            c.lineTo(width, y)
+          })
+        }
+      })
     }
     requestAnimationFrame(() => this.draw())
   }
@@ -113,4 +110,17 @@ class Lines extends Component {
 export default compose(
   withState('rows', 'setRows', []),
   withState('cursor', 'setCursor', null),
+  withProps(props => {
+    const [width, height] = [innerWidth, innerHeight]
+    const rows = props.rows
+    const xScale = scaleLinear().domain([
+      min(map('ix.parsed', rows)), max(map('ix.parsed', rows)),
+    ]).range([0, width])
+    if (!props.cursor) return {width, height}
+
+    const {x, y} = props.cursor
+    const index = sortedIndex(toYmd(new Date(xScale.invert(x))), map('ix.raw', rows))
+    const row = rows[index]
+    return {width, height, row}
+  }),
 )(Lines)
