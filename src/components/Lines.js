@@ -13,6 +13,7 @@ const parse = (unit, value) => {
   if (unit === 'date') return fromYmd(value)
   return parseFloat(value)
 }
+const COLORS = ['blue', 'red']
 
 class Lines extends Component {
   componentWillMount() {
@@ -41,42 +42,44 @@ class Lines extends Component {
   ]).range([this.props.height, 0])
 
   draw = () => {
-    if (this._ctx) {
-      const ctx = this._ctx
-      const {width, height, rows, row, xScale} = this.props
-      if (this._cvs.width !== width || this._cvs.height !== height) {
-        this._cvs.width = width
-        this._cvs.height = height
-      }
-      ctx.clearRect(0, 0, width, height)
+    requestAnimationFrame(this.draw)
+    if (!this._ctx) return
 
-      if (row) {
-        const date = row.ix.parsed
-        this.path('white', c => {
-          c.moveTo(xScale(date), 0)
-          c.lineTo(xScale(date), height)
-        })
-      }
+    const ctx = this._ctx
+    const {width, height, rows, indexes, row, xScale} = this.props
 
-      const indexes = rows.map(get('ix.parsed'))
-      const colors = ['blue', 'red']
-      table.columns.slice(1).forEach(({key}, i) => {
-        const yScale = this.makeScale(key)
-        const values = rows.map(get([key, 'parsed']))
-        const points = zip(indexes.map(xScale), values.map(yScale))
-        this.path(colors[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
+    // Reset frame
+    if (this._cvs.width !== width || this._cvs.height !== height) {
+      this._cvs.width = width
+      this._cvs.height = height
+    }
+    ctx.clearRect(0, 0, width, height)
 
-        if (row) {
-          const yScale = this.makeScale(key)
-          const y = yScale(get([key, 'parsed'], row))
-          this.path(colors[i], c => {
-            c.moveTo(0, y)
-            c.lineTo(width, y)
-          })
-        }
+    if (row) {
+      // Draw cursor
+      const date = row.ix.parsed
+      this.path('white', c => {
+        c.moveTo(xScale(date), 0)
+        c.lineTo(xScale(date), height)
       })
     }
-    requestAnimationFrame(() => this.draw())
+
+    table.columns.slice(1).forEach(({key}, i) => {
+      // Draw line
+      const yScale = this.makeScale(key)
+      const values = rows.map(get([key, 'parsed']))
+      const points = zip(indexes.map(xScale), values.map(yScale))
+      this.path(COLORS[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
+
+      if (row) {
+        // Draw horizontal line orthogonal to cursor
+        const y = yScale(get([key, 'parsed'], row))
+        this.path(COLORS[i], c => {
+          c.moveTo(0, y)
+          c.lineTo(width, y)
+        })
+      }
+    })
   }
 
   getContext = cvs => {
@@ -91,9 +94,7 @@ class Lines extends Component {
   }
 
   render() {
-    return (
-      <canvas ref={this.getContext} />
-    )
+    return <canvas ref={this.getContext} />
   }
 }
 
@@ -102,10 +103,10 @@ export default compose(
   withState('cursor', 'setCursor', null),
   withProps(props => {
     const [width, height] = [innerWidth, innerHeight]
-    const xScale = scaleLinear().domain([
-      min(map('ix.parsed', props.rows)), max(map('ix.parsed', props.rows)),
-    ]).range([0, width])
-    return {width, height, xScale}
+    const indexes = map('ix.parsed', props.rows)
+    const indexRange = [min(indexes), max(indexes)]
+    const xScale = scaleLinear().domain(indexRange).range([0, width])
+    return {width, height, xScale, indexes}
   }),
   withProps(props => {
     const {rows, xScale, width, height, cursor} = props
