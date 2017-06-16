@@ -20,7 +20,7 @@ class Lines extends Component {
     const {data, columns} = table
     const rows = data.trim().split('\n').map(x => x.split(',')).map(xs =>
       fromPairs(zipWith(
-        ({key, unit}, value) => [key, {raw: value, parsed: parse(unit, value)}],
+        ({key, unit}, value) => [key, parse(unit, value)],
         columns, xs,
       )),
     )
@@ -37,8 +37,8 @@ class Lines extends Component {
   }
 
   makeScale = key => scaleLinear().domain([
-    min(this.props.rows.map(get([key, 'parsed']))),
-    max(this.props.rows.map(get([key, 'parsed']))),
+    min(this.props.rows.map(get(key))),
+    max(this.props.rows.map(get(key))),
   ]).range([this.props.height, 0])
 
   draw = () => {
@@ -57,23 +57,22 @@ class Lines extends Component {
 
     if (row) {
       // Draw cursor
-      const date = row.ix.parsed
       this.path('white', c => {
-        c.moveTo(xScale(date), 0)
-        c.lineTo(xScale(date), height)
+        c.moveTo(xScale(row.ix), 0)
+        c.lineTo(xScale(row.ix), height)
       })
     }
 
     table.columns.slice(1).forEach(({key}, i) => {
       // Draw line
       const yScale = this.makeScale(key)
-      const values = rows.map(get([key, 'parsed']))
+      const values = rows.map(get(key))
       const points = zip(indexes.map(xScale), values.map(yScale))
       this.path(COLORS[i], c => points.forEach(([x, y]) => c.lineTo(x, y)))
 
       if (row) {
         // Draw horizontal line orthogonal to cursor
-        const y = yScale(get([key, 'parsed'], row))
+        const y = yScale(get(key, row))
         this.path(COLORS[i], c => {
           c.moveTo(0, y)
           c.lineTo(width, y)
@@ -103,16 +102,16 @@ export default compose(
   withState('cursor', 'setCursor', null),
   withProps(props => {
     const [width, height] = [innerWidth, innerHeight]
-    const indexes = map('ix.parsed', props.rows)
+    const indexes = map('ix', props.rows)
     const indexRange = [min(indexes), max(indexes)]
     const xScale = scaleLinear().domain(indexRange).range([0, width])
     return {width, height, xScale, indexes}
   }),
   withProps(props => {
-    const {rows, xScale, width, height, cursor} = props
-    if (!props.cursor) return {}
-    const {x, y} = cursor
-    const index = sortedIndex(toYmd(new Date(xScale.invert(x))), map('ix.raw', rows))
+    const {rows, xScale, width, height, cursor, indexes} = props
+    if (!cursor) return {}
+    const cursorDate = new Date(xScale.invert(cursor.x))
+    const index = sortedIndex(cursorDate, indexes)
     return {row: rows[index]}
   }),
 )(Lines)
