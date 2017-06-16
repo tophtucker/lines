@@ -37,28 +37,20 @@ class Lines extends Component {
     this._ctx.closePath()
   }
 
+  makeScale = key => scaleLinear().domain([
+    min(map(get([key, 'parsed']), this.props.rows)),
+    max(map(get([key, 'parsed']), this.props.rows)),
+  ]).range([this.props.height, 0])
+
   draw = () => {
     if (this._ctx) {
       const ctx = this._ctx
-      const {width, height, rows, row} = this.props
+      const {width, height, rows, row, xScale} = this.props
       if (this._cvs.width !== width || this._cvs.height !== height) {
         this._cvs.width = width
         this._cvs.height = height
       }
       ctx.clearRect(0, 0, width, height)
-
-      const xScale = scaleLinear().domain([
-        min(map('ix.parsed', rows)), max(map('ix.parsed', rows)),
-      ]).range([0, width])
-      const makeScale = key => scaleLinear().domain([
-        min(map(get([key, 'parsed']), rows)), max(map(get([key, 'parsed']), rows)),
-      ]).range([height, 0])
-
-      const rowLookup = keyBy('ix.raw', rows)
-      const lines = table.columns.slice(1).map(({key}) => {
-        const yScale = makeScale(key)
-        return rows.map(row => [xScale(row.ix.parsed), yScale(get([key, 'parsed'], row))])
-      })
 
       if (row) {
         const date = row.ix.parsed
@@ -69,12 +61,20 @@ class Lines extends Component {
       }
 
       const colors = ['blue', 'red']
-      zip(lines, table.columns.slice(1)).forEach(([points, {key}], i) => {
+      const lines = table.columns.slice(1).map(({key}) => {
+      })
+      table.columns.slice(1).forEach(({key}, i) => {
+        const yScale = this.makeScale(key)
+        const points = rows.map(row => [
+          xScale(row.ix.parsed),
+          yScale(get([key, 'parsed'], row)),
+        ])
         this.path({strokeStyle: colors[i]}, c => {
           points.forEach(([x, y]) => c.lineTo(x, y))
         })
+
         if (row) {
-          const yScale = makeScale(key)
+          const yScale = this.makeScale(key)
           const y = yScale(get([key, 'parsed'], row))
           this.path({strokeStyle: colors[i]}, c => {
             c.moveTo(0, y)
@@ -112,15 +112,16 @@ export default compose(
   withState('cursor', 'setCursor', null),
   withProps(props => {
     const [width, height] = [innerWidth, innerHeight]
-    const rows = props.rows
     const xScale = scaleLinear().domain([
-      min(map('ix.parsed', rows)), max(map('ix.parsed', rows)),
+      min(map('ix.parsed', props.rows)), max(map('ix.parsed', props.rows)),
     ]).range([0, width])
-    if (!props.cursor) return {width, height}
-
-    const {x, y} = props.cursor
+    return {width, height, xScale}
+  }),
+  withProps(props => {
+    const {rows, xScale, width, height, cursor} = props
+    if (!props.cursor) return {}
+    const {x, y} = cursor
     const index = sortedIndex(toYmd(new Date(xScale.invert(x))), map('ix.raw', rows))
-    const row = rows[index]
-    return {width, height, row}
+    return {row: rows[index]}
   }),
 )(Lines)
