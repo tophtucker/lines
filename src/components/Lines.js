@@ -100,9 +100,9 @@ class Lines extends Component {
   getContext = cvs => {
     this._cvs = cvs
     this._ctx = cvs.getContext('2d')
-    const {width, height} = this.props
 
     const updateCursor = ({pageX, pageY}) => {
+      const {width, height} = this.props
       const inX = pageX >= PADDING && pageX <= width - PADDING
       const inY = pageY >= PADDING && pageY <= height - PADDING
       if (inX && inY) {
