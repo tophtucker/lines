@@ -88,7 +88,7 @@ class Lines extends Component {
     toPairs({
       'mouseover': updateCursor,
       'mousemove': updateCursor,
-      'mouseout': this.props.setCursor(null),
+      'mouseout': () => this.props.setCursor(null),
     }).forEach(([evt, cb]) => cvs.addEventListener(evt, cb, false))
   }
 
