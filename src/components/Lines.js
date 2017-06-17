@@ -6,6 +6,7 @@ import {timeParse, timeFormat} from 'd3-time-format'
 import {scaleLinear} from 'd3-scale'
 
 import * as table from '../data'
+import {Scene, View, Thing} from './scenic'
 
 const fromYmd = timeParse('%Y-%m-%d')
 const toYmd = timeFormat('%Y-%m-%d')
@@ -15,7 +16,28 @@ const parse = (unit, value) => {
 }
 
 const PADDING = 40
-const COLORS = ['blue', 'red']
+const COLORS = [
+  '#5CB8E6',
+  '#CF5CE6',
+  '#7961F2',
+  '#E65C73',
+  '#e5b85c',
+  '#78e65c',
+
+  '#91D2F2',
+  '#E291F2',
+  '#A090F1',
+  '#F291A1',
+  '#f2d391',
+  '#a5f291',
+
+  '#3D7B99',
+  '#8A3D99',
+  '#5747A7',
+  '#993D4D',
+  '#997b3d',
+  '#50993d',
+]
 
 class Lines extends Component {
   componentWillMount() {
@@ -27,102 +49,80 @@ class Lines extends Component {
       )),
     )
     this.props.setRows(rows)
-    this.draw()
   }
 
-  path = (strokeStyle, cb) => {
-    Object.assign(this._ctx, {strokeStyle})
-    this._ctx.lineWidth = 1 / Math.min(this.props.width, this.props.height)
-    this._ctx.beginPath()
-    cb(this._ctx)
-    this._ctx.stroke()
-    this._ctx.closePath()
-  }
-
-  makeScale = key => scaleLinear().domain([
+  makeScale = (key, yMax) => scaleLinear().domain([
     min(this.props.rows.map(get(key))),
     max(this.props.rows.map(get(key))),
-  ]).range([1, 0])
+  ]).range([yMax, 0])
 
-  zoomContext = cb => {
-    this._ctx.save()
-    this._ctx.translate(PADDING, PADDING)
-    const {width, height} = this.props
-    this._ctx.scale(width - PADDING * 2, height - PADDING * 2)
-    cb()
-    this._ctx.restore()
-  }
+  draw = props => {
+    const {ctx, pixel, aspectRatio, rows, indexes, row, xScale} = props
 
-  draw = () => {
-    requestAnimationFrame(this.draw)
-    if (!this._ctx) return
-
-    const ctx = this._ctx
-    const {width, height, rows, indexes, row, xScale} = this.props
-
-    // Reset frame
-    if (this._cvs.width !== width || this._cvs.height !== height) {
-      this._cvs.width = width
-      this._cvs.height = height
+    if (row) {
+      // Draw cursor
+      ctx.lineWidth = 2 * pixel
+      ctx.strokeStyle = 'white'
+      ctx.beginPath()
+      ctx.moveTo(xScale(row.ix), 0)
+      ctx.lineTo(xScale(row.ix), 1000 * aspectRatio)
+      ctx.stroke()
+      ctx.closePath()
     }
-    ctx.clearRect(0, 0, width, height)
 
-    this.zoomContext(() => {
+    table.columns.slice(1).forEach(({key}, i) => {
+      // Draw line
+      const yScale = this.makeScale(key, 1000 * aspectRatio)
+      const values = rows.map(get(key))
+      const points = zip(indexes.map(xScale), values.map(yScale))
+      ctx.strokeStyle = COLORS[i]
+      ctx.lineWidth = 2 * pixel
+      ctx.beginPath()
+      points.forEach(([x, y]) => ctx.lineTo(x, y)),
+      ctx.stroke()
+      ctx.closePath()
+
       if (row) {
-        // Draw cursor
-        this.path('white', c => {
-          c.moveTo(xScale(row.ix), 0)
-          c.lineTo(xScale(row.ix), 1)
-        })
+        // Draw horizontal line orthogonal to cursor
+        ctx.strokeStyle = COLORS[i]
+        ctx.lineWidth = 2 * pixel
+        ctx.beginPath()
+        ctx.moveTo(0, yScale(get(key, row))),
+        ctx.lineTo(1000, yScale(get(key, row)))
+        ctx.stroke()
+        ctx.closePath()
       }
-
-      table.columns.slice(1).forEach(({key}, i) => {
-        // Draw line
-        const yScale = this.makeScale(key)
-        const values = rows.map(get(key))
-        const points = zip(indexes.map(xScale), values.map(yScale))
-        this.path(
-          COLORS[i],
-          c => points.forEach(([x, y]) => c.lineTo(x, y)),
-        )
-
-        if (row) {
-          // Draw horizontal line orthogonal to cursor
-          this.path(COLORS[i], c => {
-            c.moveTo(0, yScale(get(key, row))),
-            c.lineTo(1, yScale(get(key, row)))
-          })
-        }
-      })
     })
   }
 
-  getContext = cvs => {
-    this._cvs = cvs
-    this._ctx = cvs.getContext('2d')
-
-    const updateCursor = ({pageX, pageY}) => {
-      const {width, height} = this.props
-      const inX = pageX >= PADDING && pageX <= width - PADDING
-      const inY = pageY >= PADDING && pageY <= height - PADDING
-      if (inX && inY) {
-        this.props.setCursor({
-          x: (pageX - PADDING) / (width - PADDING * 2),
-          y: (pageY - PADDING) / (height - PADDING * 2),
-        })
-      } else {
-        this.props.setCursor(null)
-      }
+  updateCursor = ({pageX, pageY}) => {
+    const {width, height} = this.props
+    const inX = pageX >= PADDING && pageX <= width - PADDING
+    const inY = pageY >= PADDING && pageY <= height - PADDING
+    if (inX && inY) {
+      this.props.setCursor({
+        x: (pageX - PADDING) / (width - PADDING * 2) * 1000,
+        y: (pageY - PADDING) / (height - PADDING * 2) * 1000,
+      })
+    } else {
+      this.props.setCursor(null)
     }
-    toPairs({
-      'mouseover': updateCursor,
-      'mousemove': updateCursor,
-      'mouseout': () => this.props.setCursor(null),
-    }).forEach(([evt, cb]) => cvs.addEventListener(evt, cb, false))
   }
 
   render() {
-    return <canvas ref={this.getContext} />
+    return (
+      <Scene
+        listeners={{
+          'mouseover': this.updateCursor,
+          'mousemove': this.updateCursor,
+          'mouseout': () => this.props.setCursor(null),
+        }}
+      >
+        <View top={PADDING} left={PADDING} bottom={PADDING} right={PADDING}>
+          <Thing {...this.props} render={this.draw} />
+        </View>
+      </Scene>
+    )
   }
 }
 
@@ -133,7 +133,7 @@ export default compose(
     const indexes = map('ix', props.rows)
     const indexRange = [min(indexes), max(indexes)]
     const [width, height] = [innerWidth, innerHeight]
-    const xScale = scaleLinear().domain(indexRange).range([0, 1])
+    const xScale = scaleLinear().domain(indexRange).range([0, 1000])
     return {width, height, xScale, indexes}
   }),
   withProps(props => {
