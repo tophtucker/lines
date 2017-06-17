@@ -32,7 +32,7 @@ class Lines extends Component {
 
   path = (strokeStyle, cb) => {
     Object.assign(this._ctx, {strokeStyle})
-    this._ctx.lineWidth = 1 / this.props.width
+    this._ctx.lineWidth = 1 / Math.min(this.props.width, this.props.height)
     this._ctx.beginPath()
     cb(this._ctx)
     this._ctx.stroke()
