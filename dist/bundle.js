@@ -20372,15 +20372,17 @@
 	          return ctx.lineTo(x, y);
 	        }), ctx.stroke();
 	        ctx.closePath();
-	        ctx.setLineDash([5 * pixel, 4 * pixel]);
-	        ctx.lineWidth = 1 * pixel;
-	        ctx.beginPath();
-	        var markedRow = row || rows[0];
-	        ctx.moveTo(xScale(markedRow.ix), yScale((0, _fp.get)(key, markedRow)));
-	        ctx.lineTo(1000, yScale((0, _fp.get)(key, markedRow)));
-	        ctx.stroke();
-	        ctx.closePath();
-	        ctx.setLineDash([]);
+	
+	        if (row) {
+	          ctx.setLineDash([5 * pixel, 4 * pixel]);
+	          ctx.lineWidth = 1 * pixel;
+	          ctx.beginPath();
+	          ctx.moveTo(xScale(row.ix), yScale((0, _fp.get)(key, row)));
+	          ctx.lineTo(1000, yScale((0, _fp.get)(key, row)));
+	          ctx.stroke();
+	          ctx.closePath();
+	          ctx.setLineDash([]);
+	        }
 	      }
 	
 	      // Draw cursor
@@ -20420,19 +20422,20 @@
 	      table.columns.slice(1).forEach(function (_ref5, i) {
 	        var key = _ref5.key;
 	
-	        // Draw horizontal line orthogonal to cursor
 	        var yScale = _this.makeScale(key, 1000 * aspectRatio);
-	        var y = yScale((0, _fp.get)(key, row || rows[0]));
 	        var x = 1000;
-	        var label = (0, _fp.get)(key, row || rows[0]).toFixed(2);
-	        ctx.beginPath();
-	        ctx.fillStyle = COLORS[i];
-	        ctx.textBaseline = 'middle';
-	        ctx.fontStyle = 14 * pixel + 'px Futura';
-	        ctx.fillRect(x - ctx.measureText(label).width - 10 * pixel, y - 10 * pixel, ctx.measureText(label).width + 10 * pixel, 20 * pixel);
-	        ctx.fillStyle = 'white';
-	        ctx.fillText(label, x - ctx.measureText(label).width - 5 * pixel, y);
-	        ctx.closePath();
+	        if (row) {
+	          var y = yScale((0, _fp.get)(key, row));
+	          var label = (0, _fp.get)(key, row).toFixed(2);
+	          ctx.beginPath();
+	          ctx.fillStyle = COLORS[i];
+	          ctx.textBaseline = 'middle';
+	          ctx.fontStyle = 14 * pixel + 'px Futura';
+	          ctx.fillRect(x - ctx.measureText(label).width - 10 * pixel, y - 10 * pixel, ctx.measureText(label).width + 10 * pixel, 20 * pixel);
+	          ctx.fillStyle = 'white';
+	          ctx.fillText(label, x - ctx.measureText(label).width - 5 * pixel, y);
+	          ctx.closePath();
+	        }
 	
 	        var finalY = yScale((0, _fp.get)(key, (0, _fp.last)(rows)));
 	        var finalLabel = (0, _fp.get)(key, (0, _fp.last)(rows)).toFixed(2);

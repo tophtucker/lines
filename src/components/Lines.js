@@ -70,15 +70,17 @@ class Lines extends Component {
       points.forEach(([x, y]) => ctx.lineTo(x, y)),
       ctx.stroke()
       ctx.closePath()
-      ctx.setLineDash([5 * pixel, 4 * pixel])
-      ctx.lineWidth = 1 * pixel
-      ctx.beginPath()
-      const markedRow = row || rows[0]
-      ctx.moveTo(xScale(markedRow.ix), yScale(get(key, markedRow)))
-      ctx.lineTo(1000, yScale(get(key, markedRow)))
-      ctx.stroke()
-      ctx.closePath()
-      ctx.setLineDash([])
+
+      if (row) {
+        ctx.setLineDash([5 * pixel, 4 * pixel])
+        ctx.lineWidth = 1 * pixel
+        ctx.beginPath()
+        ctx.moveTo(xScale(row.ix), yScale(get(key, row)))
+        ctx.lineTo(1000, yScale(get(key, row)))
+        ctx.stroke()
+        ctx.closePath()
+        ctx.setLineDash([])
+      }
     })
 
     // Draw cursor
@@ -110,19 +112,20 @@ class Lines extends Component {
     const {ctx, pixel, aspectRatio, rows, indexes, row, xScale, cursor} = props
 
     table.columns.slice(1).forEach(({key}, i) => {
-      // Draw horizontal line orthogonal to cursor
       const yScale = this.makeScale(key, 1000 * aspectRatio)
-      const y = yScale(get(key, row || rows[0]))
       const x = 1000
-      const label = get(key, row || rows[0]).toFixed(2)
-      ctx.beginPath()
-      ctx.fillStyle = COLORS[i]
-      ctx.textBaseline = 'middle'
-      ctx.fontStyle = `${14 * pixel}px Futura`
-      ctx.fillRect(x - ctx.measureText(label).width - 10 * pixel, y - 10 * pixel, ctx.measureText(label).width + 10 * pixel, 20 * pixel)
-      ctx.fillStyle = 'white'
-      ctx.fillText(label, x - ctx.measureText(label).width - 5 * pixel, y)
-      ctx.closePath()
+      if (row) {
+        const y = yScale(get(key, row))
+        const label = get(key, row).toFixed(2)
+        ctx.beginPath()
+        ctx.fillStyle = COLORS[i]
+        ctx.textBaseline = 'middle'
+        ctx.fontStyle = `${14 * pixel}px Futura`
+        ctx.fillRect(x - ctx.measureText(label).width - 10 * pixel, y - 10 * pixel, ctx.measureText(label).width + 10 * pixel, 20 * pixel)
+        ctx.fillStyle = 'white'
+        ctx.fillText(label, x - ctx.measureText(label).width - 5 * pixel, y)
+        ctx.closePath()
+      }
 
       const finalY = yScale(get(key, last(rows)))
       const finalLabel = get(key, last(rows)).toFixed(2)
