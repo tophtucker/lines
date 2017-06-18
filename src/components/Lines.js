@@ -1,5 +1,5 @@
 import {withState, withProps} from 'recompose'
-import {fromPairs, zip, zipWith, map, max, min, get, compose, sortedIndex, toPairs} from 'lodash/fp'
+import {fromPairs, zip, zipWith, map, max, min, get, compose, sortedIndex, toPairs, last} from 'lodash/fp'
 import {Component} from 'react'
 import cx from 'classnames'
 import {timeParse, timeFormat} from 'd3-time-format'
@@ -57,18 +57,7 @@ class Lines extends Component {
   ]).range([yMax, 0])
 
   draw = props => {
-    const {ctx, pixel, aspectRatio, rows, indexes, row, xScale} = props
-
-    if (row) {
-      // Draw cursor
-      ctx.lineWidth = 2 * pixel
-      ctx.strokeStyle = 'white'
-      ctx.beginPath()
-      ctx.moveTo(xScale(row.ix), 0)
-      ctx.lineTo(xScale(row.ix), 1000 * aspectRatio)
-      ctx.stroke()
-      ctx.closePath()
-    }
+    const {ctx, pixel, aspectRatio, rows, indexes, row, xScale, cursor} = props
 
     table.columns.slice(1).forEach(({key}, i) => {
       // Draw line
@@ -76,22 +65,75 @@ class Lines extends Component {
       const values = rows.map(get(key))
       const points = zip(indexes.map(xScale), values.map(yScale))
       ctx.strokeStyle = COLORS[i]
-      ctx.lineWidth = 2 * pixel
+      ctx.lineWidth = 4 * pixel
       ctx.beginPath()
       points.forEach(([x, y]) => ctx.lineTo(x, y)),
       ctx.stroke()
       ctx.closePath()
+      ctx.setLineDash([5 * pixel, 4 * pixel])
+      ctx.lineWidth = 1 * pixel
+      ctx.beginPath()
+      const markedRow = row || rows[0]
+      ctx.moveTo(xScale(markedRow.ix), yScale(get(key, markedRow)))
+      ctx.lineTo(1000, yScale(get(key, markedRow)))
+      ctx.stroke()
+      ctx.closePath()
+      ctx.setLineDash([])
+    })
 
-      if (row) {
-        // Draw horizontal line orthogonal to cursor
-        ctx.strokeStyle = COLORS[i]
-        ctx.lineWidth = 2 * pixel
-        ctx.beginPath()
-        ctx.moveTo(0, yScale(get(key, row))),
-        ctx.lineTo(1000, yScale(get(key, row)))
-        ctx.stroke()
-        ctx.closePath()
-      }
+    // Draw cursor
+    const markedRow = row || rows[0]
+    ctx.lineWidth = 2 * pixel
+    ctx.setLineDash([5 * pixel, 4 * pixel])
+    ctx.strokeStyle = 'lightgray'
+    ctx.beginPath()
+    ctx.moveTo(xScale(markedRow.ix), 0)
+    const y = cursor ? 1000 * aspectRatio * cursor.y : 1000 * aspectRatio
+    ctx.lineTo(xScale(markedRow.ix), 1000 * aspectRatio)
+    ctx.moveTo(xScale(markedRow.ix), y)
+    ctx.lineTo(1000, y)
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.closePath()
+
+    ctx.beginPath()
+    ctx.fillStyle = '#19191a'
+    ctx.strokeStyle = 'lightgray'
+    ctx.lineWidth = 2 * pixel
+    ctx.arc(xScale(markedRow.ix), y, pixel * 5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    ctx.closePath()
+  }
+
+  drawLabels = props => {
+    const {ctx, pixel, aspectRatio, rows, indexes, row, xScale, cursor} = props
+
+    table.columns.slice(1).forEach(({key}, i) => {
+      // Draw horizontal line orthogonal to cursor
+      const yScale = this.makeScale(key, 1000 * aspectRatio)
+      const y = yScale(get(key, row || rows[0]))
+      const x = 1000
+      const label = get(key, row || rows[0]).toFixed(2)
+      ctx.beginPath()
+      ctx.fillStyle = COLORS[i]
+      ctx.textBaseline = 'middle'
+      ctx.fontStyle = `${14 * pixel}px Futura`
+      ctx.fillRect(x - ctx.measureText(label).width - 10 * pixel, y - 10 * pixel, ctx.measureText(label).width + 10 * pixel, 20 * pixel)
+      ctx.fillStyle = 'white'
+      ctx.fillText(label, x - ctx.measureText(label).width - 5 * pixel, y)
+      ctx.closePath()
+
+      const finalY = yScale(get(key, last(rows)))
+      const finalLabel = get(key, last(rows)).toFixed(2)
+      ctx.beginPath()
+      ctx.fillStyle = COLORS[i]
+      ctx.textBaseline = 'middle'
+      ctx.fontStyle = `${14 * pixel}px Futura`
+      ctx.fillRect(x - ctx.measureText(finalLabel).width - 10 * pixel, finalY - 10 * pixel, ctx.measureText(finalLabel).width + 10 * pixel, 20 * pixel)
+      ctx.fillStyle = 'white'
+      ctx.fillText(finalLabel, x - ctx.measureText(finalLabel).width - 5 * pixel, finalY)
+      ctx.closePath()
     })
   }
 
@@ -101,8 +143,8 @@ class Lines extends Component {
     const inY = pageY >= PADDING && pageY <= height - PADDING
     if (inX && inY) {
       this.props.setCursor({
-        x: (pageX - PADDING) / (width - PADDING * 2) * 1000,
-        y: (pageY - PADDING) / (height - PADDING * 2) * 1000,
+        x: (pageX - PADDING) / (width - PADDING * 2),
+        y: (pageY - PADDING) / (height - PADDING * 2),
       })
     } else {
       this.props.setCursor(null)
@@ -118,8 +160,13 @@ class Lines extends Component {
           'mouseout': () => this.props.setCursor(null),
         }}
       >
-        <View top={PADDING} left={PADDING} bottom={PADDING} right={PADDING}>
-          <Thing {...this.props} render={this.draw} />
+        <View>
+          <View top={PADDING} left={PADDING} right={PADDING} bottom={PADDING}>
+            <Thing {...this.props} render={this.draw} />
+          </View>
+          <View top={PADDING} bottom={PADDING}>
+            <Thing {...this.props} render={this.drawLabels} />
+          </View>
         </View>
       </Scene>
     )
@@ -139,7 +186,7 @@ export default compose(
   withProps(props => {
     const {rows, xScale, width, height, cursor, indexes} = props
     if (!cursor) return {}
-    const cursorDate = new Date(xScale.invert(cursor.x))
+    const cursorDate = new Date(xScale.invert(cursor.x * 1000))
     const index = sortedIndex(cursorDate, indexes)
     return {row: rows[index]}
   }),
