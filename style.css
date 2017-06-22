@@ -1,0 +1,47 @@
+body {
+  margin: 0;
+}
+
+svg {
+  background: #19191a;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+rect.click-capture {
+  fill: none;
+  pointer-events: all;
+  cursor: none;
+}
+
+path.line {
+  fill: none;
+  stroke-width: 4;
+}
+
+.cursor {
+  pointer-events: none;
+}
+
+.cursor line {
+  stroke-dasharray: 5,4;
+  stroke: lightgray;
+  stroke-width: 2;
+}
+
+.cursor circle {
+  fill: #19191a;
+  stroke: lightgray;
+  stroke-width: 2;
+}
+
+.cursor .crosshair {
+  stroke-width: 1;
+}
+
+.label {
+  font: 12px Futura;
+}
